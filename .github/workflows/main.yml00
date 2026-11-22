@@ -1,0 +1,40 @@
+ Build Universe X
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Try to add the VS 2017 (v141) toolset
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+          $vs = & "$installer\vswhere.exe" -latest -property installationPath
+          Start-Process -Wait -FilePath "$installer\vs_installer.exe" -ArgumentList "modify --installPath `"$vs`" --add Microsoft.VisualStudio.Component.VC.v141.x86.x64 --quiet --norestart --nocache"
+
+      - name: Configure (v141 if available, otherwise default toolset)
+        shell: pwsh
+        run: |
+          cmake -B build -G "Visual Studio 17 2022" -A x64 -T v141
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "v141 not available, using the default toolset"
+            Remove-Item -Recurse -Force build -ErrorAction SilentlyContinue
+            cmake -B build -G "Visual Studio 17 2022" -A x64
+          }
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: UniverseX-Windows
+          path: |
+            build/UniverseX_artefacts/Release/VST3
+            build/UniverseX_artefacts/Release/Standalone
